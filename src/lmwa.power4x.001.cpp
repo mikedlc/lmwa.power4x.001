@@ -7,6 +7,10 @@
 */
 /***************************************************************************************************************************/
 
+//Device Information
+const char* ProgramID = "LMWA.p4x.001";
+const char* SensorType = "Power";
+
 // I/O items
 #define Run_LED 4
 
@@ -19,33 +23,35 @@
 #define AD_Samples 500  // A/D samples taken per channel read
 #define Sample_rate 500   // delay in uS between A/D sample readings
 
-/* Measured results (with an Owon HDS272S): 
 
-Samples versus sample rate. Using 50Hz each AC cycles takes 20mS
 
-Test 1: AD_Samples = 1000, Sample_rate = 10uS (result = OK)
-96mS per channel input measurement sampling 4.8 AC cycles, 208 samples per AC cycle.
-
-Test 2: AD_Samples = 400, Sample_rate = 100uS (result = a little better)
-75mS per channel input measurement sampling 3.7 AC cycles, 108 samples per AC cycle.
-
-Test 3: AD_Samples = 500, Sample_rate = 500uS (result = better)
-298mS per channel input measurement sampling 14.9 AC cycles, 33 samples per AC cycle.
-
-Test 4: AD_Samples = 400, Sample_rate = 1000uS (result = most stable)
-436mS per channel input measurement sampling 21.8 AC cycles, 18 samples per AC cycle.
-
-Looks like sampling more AC cycles even with fewer samples per cycle is the most stable (Test 4), but does take 0.4 seconds.
-Test 3 looks like a good compromise between stability and sample read time.
-
-*/
-
+//Power Reading Stuff
 #include <ESP32_4CH_CT.h>
 // make an instance of ESP32_4CH_CT
 ESP32_4CH_CT My_PCB(AD_1, AD_2, AD_3, AD_4, AD_Samples, Sample_rate, Cal_value);
-
 int8_t ADS_Input = 0;              // A/D channel select
 double Value[4] = { 0, 0, 0, 0 };  // array for results
+
+//For 1.3in displays
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SH110X.h>
+#define i2c_Address 0x3c //initialize with the I2C addr 0x3C Typically eBay OLED's
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define OLED_RESET -1   //   QT-PY / XIAO
+Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//Timing
+unsigned long currentMillis = 0;
+int uptimeSeconds = 0;
+int uptimeDays;
+int uptimeHours;
+int secsRemaining;
+int uptimeMinutes;
+char uptimeTotal[30];
+
 
 void setup() {
 
@@ -66,10 +72,35 @@ void setup() {
   delay(5000);
   digitalWrite(Run_LED, LOW);
 
+  //1.3" OLED Setup
+  delay(250); // wait for the OLED to power up
+  display.begin(i2c_Address, true); // Address 0x3C default
+  display.display(); //Turn on
+  delay(2000);
+
+  // Clear the buffer & start drawing
+  display.clearDisplay(); // Clear display
+  display.drawPixel(64, 64, SH110X_WHITE); // draw a single pixel
+  display.display();   // Show the display buffer on the hardware.
+  delay(2000); // Wait a couple
+  display.clearDisplay(); // Clear display
+
 }  // end of setup
 
 
 void loop() {
+  //Start keeping track of time
+  currentMillis = millis();
+
+  //Calculat Uptime
+  uptimeSeconds=currentMillis/1000;
+  uptimeHours= uptimeSeconds/3600;
+  uptimeDays=uptimeHours/24;
+  secsRemaining=uptimeSeconds%3600;
+  uptimeMinutes=secsRemaining/60;
+  uptimeSeconds=secsRemaining%60;
+  sprintf(uptimeTotal,"Uptime %02dD:%02d:%02d:%02d",uptimeDays,uptimeHours,uptimeMinutes,uptimeSeconds);
+
 
   Serial.println("I'm Alive!");
   // read A/D values and store in array Value[]
@@ -92,4 +123,16 @@ void loop() {
   String Report = String(Value[0]) + ", " + String(Value[1]) + ", " + String(Value[2]) + ", " + String(Value[3]) + "      ";
   Serial.println(Report);
 
+  display.clearDisplay(); // clear the display
+
+  //buffer next display payload
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 0);
+  display.print("Sensor: "); display.println(SensorType);
+  display.print("Prog. ID: "); display.println(ProgramID);
+  //display.print("IP:"); display.println(WiFi.localIP());
+  display.print(uptimeTotal);
+
+  display.display(); // Write the buffer to the display
 }  // end of loop
