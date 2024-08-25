@@ -9,7 +9,7 @@
 
 //Device Information
 const char* ProgramID = "LMWA.p4x.001";
-const char* SensorType = "Power";
+const char* SensorType = "Boost Pumps";
 
 // I/O items
 #define Run_LED 4
@@ -30,7 +30,7 @@ const char* SensorType = "Power";
 // make an instance of ESP32_4CH_CT
 ESP32_4CH_CT My_PCB(AD_1, AD_2, AD_3, AD_4, AD_Samples, Sample_rate, Cal_value);
 int8_t ADS_Input = 0;              // A/D channel select
-double Value[4] = { 0, 0, 0, 0 };  // array for results
+double PowerReadings[4] = { 0, 0, 0, 0 };  // array for results
 
 //For 1.3in displays
 #include <SPI.h>
@@ -108,9 +108,12 @@ void loop() {
   digitalWrite(Run_LED, HIGH);
   // sampling each channel takes around 400mS. 400 samples (20 cycles @50Hz) with a 1mS per A/D sample.
   // higher sampling rates can have issues when WiFi enabled on the ESP8266
-  (Value[ADS_Input] = My_PCB.power_sample(ADS_Input)) / 100;
+  (PowerReadings[ADS_Input] = My_PCB.power_sample(ADS_Input)) / 100;
   digitalWrite(Run_LED, LOW);
-
+  
+  if (PowerReadings[ADS_Input] < .5){
+    PowerReadings[ADS_Input] = 0;
+  }
   // inc ready for next A/D channel
   ADS_Input++;
   if (ADS_Input > 3) {
@@ -120,7 +123,7 @@ void loop() {
   // report results
   delay(100);
 
-  String Report = String(Value[0]) + ", " + String(Value[1]) + ", " + String(Value[2]) + ", " + String(Value[3]) + "      ";
+  String Report = String(PowerReadings[0]) + ", " + String(PowerReadings[1]) + ", " + String(PowerReadings[2]) + ", " + String(PowerReadings[3]) + "      ";
   Serial.println(Report);
 
   display.clearDisplay(); // clear the display
@@ -131,9 +134,9 @@ void loop() {
   display.setCursor(0, 0);
   display.print("Sensor: "); display.println(SensorType);
   display.print("Prog.ID: "); display.println(ProgramID);
-  display.print("Pump 1: "); display.println(Value[0]);
-  display.print("Pump 2: "); display.println(Value[1]);
-  display.print("Pump 3: "); display.println(Value[2]);
+  display.print("Pump 1 Amps: "); display.println(PowerReadings[0]);
+  display.print("Pump 2 Amps: "); display.println(PowerReadings[1]);
+  display.print("Pump 3 Amps: "); display.println(PowerReadings[2]);
   //display.print("IP:"); display.println(WiFi.localIP());
   display.print(uptimeTotal);
 
