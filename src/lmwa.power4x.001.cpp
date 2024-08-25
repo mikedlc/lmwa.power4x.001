@@ -130,7 +130,10 @@ void loop() {
   display.setTextColor(SH110X_WHITE);
   display.setCursor(0, 0);
   display.print("Sensor: "); display.println(SensorType);
-  display.print("Prog. ID: "); display.println(ProgramID);
+  display.print("Prog.ID: "); display.println(ProgramID);
+  display.print("Pump 1: "); display.println(Value[0]);
+  display.print("Pump 2: "); display.println(Value[1]);
+  display.print("Pump 3: "); display.println(Value[2]);
   //display.print("IP:"); display.println(WiFi.localIP());
   display.print(uptimeTotal);
 
