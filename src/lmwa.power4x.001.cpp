@@ -15,7 +15,7 @@
 #define AD_2 35          // GPIO pin for A/D input channel 2
 #define AD_3 36          // GPIO pin for A/D input channel 3
 #define AD_4 39          // GPIO pin for A/D input channel 4
-#define Cal_value 6000//1500   // calibration value
+#define Cal_value 90   //was 6000   // calibration value
 #define AD_Samples 500  // A/D samples taken per channel read
 #define Sample_rate 500   // delay in uS between A/D sample readings
 
@@ -53,7 +53,8 @@ void setup() {
   pinMode(Run_LED, OUTPUT);
 
   // start the serial connection
-  Serial.begin(115200);
+  Serial.begin(9600);
+  delay(1000);
   Serial.println("");
   Serial.println("");
   Serial.println("Up and Clackin!");
@@ -70,6 +71,7 @@ void setup() {
 
 void loop() {
 
+  Serial.println("I'm Alive!");
   // read A/D values and store in array Value[]
   // these values are representations of Amps (RMS) measured, and still require some calibration
   digitalWrite(Run_LED, HIGH);
