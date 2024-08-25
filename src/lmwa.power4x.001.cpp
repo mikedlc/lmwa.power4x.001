@@ -52,6 +52,25 @@ int secsRemaining;
 int uptimeMinutes;
 char uptimeTotal[30];
 
+//Wifi Stuff
+void printWifiStatus();
+#include <WiFi.h>
+#include <PubSubClient.h>
+//const char *ssid =	"LMWA-PumpHouse";		// cannot be longer than 32 characters!
+//const char *pass =	"ds42396xcr5";		//
+const char *ssid =	"WiFiFoFum";		// cannot be longer than 32 characters!
+const char *pass =	"6316EarlyGlow";		//
+WiFiClient client;
+String wifistatustoprint;
+
+
+//Tago.io server address and device token
+void httpRequest();
+char server[] = "api.tago.io";
+String Device_Token = "******************************************"; //d1_002_pressure_sensor Default token
+unsigned long lastConnectionTime = 0;            // last time you connected to the server, in milliseconds
+unsigned long postingInterval = 10 * 1000; // delay between updates, in milliseconds
+int counter = 1;
 
 void setup() {
 
@@ -60,7 +79,7 @@ void setup() {
 
   // start the serial connection
   Serial.begin(9600);
-  delay(1000);
+  delay(3000);
   Serial.println("");
   Serial.println("");
   Serial.println("Up and Clackin!");
@@ -101,8 +120,61 @@ void loop() {
   uptimeSeconds=secsRemaining%60;
   sprintf(uptimeTotal,"Uptime %02dD:%02d:%02d:%02d",uptimeDays,uptimeHours,uptimeMinutes,uptimeSeconds);
 
+  //Wifi Stuff
+  if (WiFi.status() != WL_CONNECTED) {
+    
+    //Write wifi connection to display
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 0);
+    display.println("Booting Program ID:");
+    display.println(ProgramID);
+    display.println("Sensor Type:");
+    display.println(SensorType);
+    display.println("Connecting To WiFi:");
+    display.println(ssid);
+    display.println("\nWait for it......");
+    display.display();
 
-  Serial.println("I'm Alive!");
+    //write wifi connection to serial
+    Serial.print("Connecting to ");
+    Serial.print(ssid);
+    Serial.println("...");
+    WiFi.setHostname(ProgramID);
+    WiFi.begin(ssid, pass);
+
+    //delay 8 seconds for effect
+    delay(8000);
+
+    if (WiFi.waitForConnectResult() != WL_CONNECTED){
+      return;
+    }
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 0);
+    display.println("Boost Pum Sensor\nDevice ID: LMWA.p4x.001");
+    display.setTextSize(1);
+    display.println(" ");
+    display.println("Connected To WiFi:");
+    display.println(ssid);
+    display.println(" ");
+    display.display();
+
+    Serial.println("\n\nWiFi Connected! ");
+    printWifiStatus();
+
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifistatustoprint="Wifi Connected!";
+  }else{
+    wifistatustoprint="Womp, No Wifi!";
+  }
+
+
+
   // read A/D values and store in array Value[]
   // these values are representations of Amps (RMS) measured, and still require some calibration
   digitalWrite(Run_LED, HIGH);
@@ -110,7 +182,7 @@ void loop() {
   // higher sampling rates can have issues when WiFi enabled on the ESP8266
   (PowerReadings[ADS_Input] = My_PCB.power_sample(ADS_Input)) / 100;
   digitalWrite(Run_LED, LOW);
-  
+
   if (PowerReadings[ADS_Input] < .5){
     PowerReadings[ADS_Input] = 0;
   }
@@ -137,8 +209,79 @@ void loop() {
   display.print("Pump 1 Amps: "); display.println(PowerReadings[0]);
   display.print("Pump 2 Amps: "); display.println(PowerReadings[1]);
   display.print("Pump 3 Amps: "); display.println(PowerReadings[2]);
-  //display.print("IP:"); display.println(WiFi.localIP());
+  display.print("Pump 4 Amps: "); display.println("N/A");
+  display.print("IP:"); display.println(WiFi.localIP());
   display.print(uptimeTotal);
 
   display.display(); // Write the buffer to the display
+
+  //Time to post data?
+  //if (currentMillis - lastConnectionTime > postingInterval) {
+  //  Serial.print("Time to post to tago.io at "); Serial.println(uptimeTotal);
+    // then, send data to Tago
+  //  httpRequest();
+  //}
+  counter++;
+
 }  // end of loop
+
+
+// this method makes a HTTP connection to tago.io
+void httpRequest() {
+/*
+  Serial.println("Sending this Pressure:");
+  Serial.println(psi);
+
+    // close any connection before send a new request.
+    // This will free the socket on the WiFi shield
+    client.stop();
+
+    Serial.println("Starting connection to server for Pressure...");
+    // if you get a connection, report back via serial:
+    String PostPressure = String("{\"variable\":\"pressure\", \"value\":") + String(psi)+ String(",\"unit\":\"PSI\"}");
+    String Dev_token = String("Device-Token: ")+ String(Device_Token);
+    if (client.connect(server,80)) {                      // we will use non-secured connnection (HTTP) for tests
+    Serial.println("Connected to server");
+    // Make a HTTP request:
+    client.println("POST /data? HTTP/1.1");
+    client.println("Host: api.tago.io");
+    client.println("_ssl: false");                        // for non-secured connection, use this option "_ssl: false"
+    client.println(Dev_token);
+    client.println("Content-Type: application/json");
+    client.print("Content-Length: ");
+    client.println(PostPressure.length());
+    client.println();
+    client.println(PostPressure);
+    Serial.println("Pressure sent!\n");
+    }  else {
+      // if you couldn't make a connection:
+      Serial.println("Server connection failed.");
+    }
+
+    client.stop();
+
+    // note the time that the connection was made:
+    lastConnectionTime = currentMillis;
+    */
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  Serial.print("Hostname: ");
+  Serial.println(WiFi.getHostname());
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+  Serial.println("");
+}
