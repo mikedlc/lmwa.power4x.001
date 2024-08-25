@@ -7,6 +7,10 @@
 */
 /***************************************************************************************************************************/
 
+//Device Information
+const char* ProgramID = "LMWA.p4x.001";
+const char* SensorType = "Boost Pumps";
+
 // I/O items
 #define Run_LED 4
 
@@ -19,33 +23,54 @@
 #define AD_Samples 500  // A/D samples taken per channel read
 #define Sample_rate 500   // delay in uS between A/D sample readings
 
-/* Measured results (with an Owon HDS272S): 
 
-Samples versus sample rate. Using 50Hz each AC cycles takes 20mS
 
-Test 1: AD_Samples = 1000, Sample_rate = 10uS (result = OK)
-96mS per channel input measurement sampling 4.8 AC cycles, 208 samples per AC cycle.
-
-Test 2: AD_Samples = 400, Sample_rate = 100uS (result = a little better)
-75mS per channel input measurement sampling 3.7 AC cycles, 108 samples per AC cycle.
-
-Test 3: AD_Samples = 500, Sample_rate = 500uS (result = better)
-298mS per channel input measurement sampling 14.9 AC cycles, 33 samples per AC cycle.
-
-Test 4: AD_Samples = 400, Sample_rate = 1000uS (result = most stable)
-436mS per channel input measurement sampling 21.8 AC cycles, 18 samples per AC cycle.
-
-Looks like sampling more AC cycles even with fewer samples per cycle is the most stable (Test 4), but does take 0.4 seconds.
-Test 3 looks like a good compromise between stability and sample read time.
-
-*/
-
+//Power Reading Stuff
 #include <ESP32_4CH_CT.h>
 // make an instance of ESP32_4CH_CT
 ESP32_4CH_CT My_PCB(AD_1, AD_2, AD_3, AD_4, AD_Samples, Sample_rate, Cal_value);
-
 int8_t ADS_Input = 0;              // A/D channel select
-double Value[4] = { 0, 0, 0, 0 };  // array for results
+double PowerReadings[4] = { 0, 0, 0, 0 };  // array for results
+
+//For 1.3in displays
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SH110X.h>
+#define i2c_Address 0x3c //initialize with the I2C addr 0x3C Typically eBay OLED's
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define OLED_RESET -1   //   QT-PY / XIAO
+Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+//Timing
+unsigned long currentMillis = 0;
+int uptimeSeconds = 0;
+int uptimeDays;
+int uptimeHours;
+int secsRemaining;
+int uptimeMinutes;
+char uptimeTotal[30];
+
+//Wifi Stuff
+void printWifiStatus();
+#include <WiFi.h>
+#include <PubSubClient.h>
+//const char *ssid =	"LMWA-PumpHouse";		// cannot be longer than 32 characters!
+//const char *pass =	"ds42396xcr5";		//
+const char *ssid =	"WiFiFoFum";		// cannot be longer than 32 characters!
+const char *pass =	"6316EarlyGlow";		//
+WiFiClient client;
+String wifistatustoprint;
+
+
+//Tago.io server address and device token
+void httpRequest();
+char server[] = "api.tago.io";
+String Device_Token = "******************************************"; //d1_002_pressure_sensor Default token
+unsigned long lastConnectionTime = 0;            // last time you connected to the server, in milliseconds
+unsigned long postingInterval = 10 * 1000; // delay between updates, in milliseconds
+int counter = 1;
 
 void setup() {
 
@@ -54,7 +79,7 @@ void setup() {
 
   // start the serial connection
   Serial.begin(9600);
-  delay(1000);
+  delay(3000);
   Serial.println("");
   Serial.println("");
   Serial.println("Up and Clackin!");
@@ -66,20 +91,101 @@ void setup() {
   delay(5000);
   digitalWrite(Run_LED, LOW);
 
+  //1.3" OLED Setup
+  delay(250); // wait for the OLED to power up
+  display.begin(i2c_Address, true); // Address 0x3C default
+  display.display(); //Turn on
+  delay(2000);
+
+  // Clear the buffer & start drawing
+  display.clearDisplay(); // Clear display
+  display.drawPixel(64, 64, SH110X_WHITE); // draw a single pixel
+  display.display();   // Show the display buffer on the hardware.
+  delay(2000); // Wait a couple
+  display.clearDisplay(); // Clear display
+
 }  // end of setup
 
 
 void loop() {
+  //Start keeping track of time
+  currentMillis = millis();
 
-  Serial.println("I'm Alive!");
+  //Calculat Uptime
+  uptimeSeconds=currentMillis/1000;
+  uptimeHours= uptimeSeconds/3600;
+  uptimeDays=uptimeHours/24;
+  secsRemaining=uptimeSeconds%3600;
+  uptimeMinutes=secsRemaining/60;
+  uptimeSeconds=secsRemaining%60;
+  sprintf(uptimeTotal,"Uptime %02dD:%02d:%02d:%02d",uptimeDays,uptimeHours,uptimeMinutes,uptimeSeconds);
+
+  //Wifi Stuff
+  if (WiFi.status() != WL_CONNECTED) {
+    
+    //Write wifi connection to display
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 0);
+    display.println("Booting Program ID:");
+    display.println(ProgramID);
+    display.println("Sensor Type:");
+    display.println(SensorType);
+    display.println("Connecting To WiFi:");
+    display.println(ssid);
+    display.println("\nWait for it......");
+    display.display();
+
+    //write wifi connection to serial
+    Serial.print("Connecting to ");
+    Serial.print(ssid);
+    Serial.println("...");
+    WiFi.setHostname(ProgramID);
+    WiFi.begin(ssid, pass);
+
+    //delay 8 seconds for effect
+    delay(8000);
+
+    if (WiFi.waitForConnectResult() != WL_CONNECTED){
+      return;
+    }
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 0);
+    display.println("Boost Pum Sensor\nDevice ID: LMWA.p4x.001");
+    display.setTextSize(1);
+    display.println(" ");
+    display.println("Connected To WiFi:");
+    display.println(ssid);
+    display.println(" ");
+    display.display();
+
+    Serial.println("\n\nWiFi Connected! ");
+    printWifiStatus();
+
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifistatustoprint="Wifi Connected!";
+  }else{
+    wifistatustoprint="Womp, No Wifi!";
+  }
+
+
+
   // read A/D values and store in array Value[]
   // these values are representations of Amps (RMS) measured, and still require some calibration
   digitalWrite(Run_LED, HIGH);
   // sampling each channel takes around 400mS. 400 samples (20 cycles @50Hz) with a 1mS per A/D sample.
   // higher sampling rates can have issues when WiFi enabled on the ESP8266
-  (Value[ADS_Input] = My_PCB.power_sample(ADS_Input)) / 100;
+  (PowerReadings[ADS_Input] = My_PCB.power_sample(ADS_Input)) / 100;
   digitalWrite(Run_LED, LOW);
 
+  if (PowerReadings[ADS_Input] < .5){
+    PowerReadings[ADS_Input] = 0;
+  }
   // inc ready for next A/D channel
   ADS_Input++;
   if (ADS_Input > 3) {
@@ -89,7 +195,93 @@ void loop() {
   // report results
   delay(100);
 
-  String Report = String(Value[0]) + ", " + String(Value[1]) + ", " + String(Value[2]) + ", " + String(Value[3]) + "      ";
+  String Report = String(PowerReadings[0]) + ", " + String(PowerReadings[1]) + ", " + String(PowerReadings[2]) + ", " + String(PowerReadings[3]) + "      ";
   Serial.println(Report);
 
+  display.clearDisplay(); // clear the display
+
+  //buffer next display payload
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 0);
+  display.print("Sensor: "); display.println(SensorType);
+  display.print("Prog.ID: "); display.println(ProgramID);
+  display.print("Pump 1 Amps: "); display.println(PowerReadings[0]);
+  display.print("Pump 2 Amps: "); display.println(PowerReadings[1]);
+  display.print("Pump 3 Amps: "); display.println(PowerReadings[2]);
+  display.print("Pump 4 Amps: "); display.println("N/A");
+  display.print("IP:"); display.println(WiFi.localIP());
+  display.print(uptimeTotal);
+
+  display.display(); // Write the buffer to the display
+
+  //Time to post data?
+  //if (currentMillis - lastConnectionTime > postingInterval) {
+  //  Serial.print("Time to post to tago.io at "); Serial.println(uptimeTotal);
+    // then, send data to Tago
+  //  httpRequest();
+  //}
+  counter++;
+
 }  // end of loop
+
+
+// this method makes a HTTP connection to tago.io
+void httpRequest() {
+/*
+  Serial.println("Sending this Pressure:");
+  Serial.println(psi);
+
+    // close any connection before send a new request.
+    // This will free the socket on the WiFi shield
+    client.stop();
+
+    Serial.println("Starting connection to server for Pressure...");
+    // if you get a connection, report back via serial:
+    String PostPressure = String("{\"variable\":\"pressure\", \"value\":") + String(psi)+ String(",\"unit\":\"PSI\"}");
+    String Dev_token = String("Device-Token: ")+ String(Device_Token);
+    if (client.connect(server,80)) {                      // we will use non-secured connnection (HTTP) for tests
+    Serial.println("Connected to server");
+    // Make a HTTP request:
+    client.println("POST /data? HTTP/1.1");
+    client.println("Host: api.tago.io");
+    client.println("_ssl: false");                        // for non-secured connection, use this option "_ssl: false"
+    client.println(Dev_token);
+    client.println("Content-Type: application/json");
+    client.print("Content-Length: ");
+    client.println(PostPressure.length());
+    client.println();
+    client.println(PostPressure);
+    Serial.println("Pressure sent!\n");
+    }  else {
+      // if you couldn't make a connection:
+      Serial.println("Server connection failed.");
+    }
+
+    client.stop();
+
+    // note the time that the connection was made:
+    lastConnectionTime = currentMillis;
+    */
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  Serial.print("Hostname: ");
+  Serial.println(WiFi.getHostname());
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+  Serial.println("");
+}
