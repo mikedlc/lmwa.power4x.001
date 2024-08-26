@@ -60,7 +60,7 @@ void printWifiStatus();
 //const char *pass =	"ds42396xcr5";		//
 const char *ssid =	"WiFiFoFum";		// cannot be longer than 32 characters!
 const char *pass =	"6316EarlyGlow";		//
-WiFiClient client;
+WiFiClient wifi_client;
 String wifistatustoprint;
 
 
@@ -71,6 +71,17 @@ String Device_Token = "******************************************"; //d1_002_pre
 unsigned long lastConnectionTime = 0;            // last time you connected to the server, in milliseconds
 unsigned long postingInterval = 10 * 1000; // delay between updates, in milliseconds
 int counter = 1;
+
+//MQTT Stuff
+void callback(char* topic, byte* payload, unsigned int length);
+void reconnect();
+void sendMQTT(double PowerReading);
+const char* mqtt_server = "homeassistant.local";  //Your network's MQTT server (usually same IP address as Home Assistant server)
+PubSubClient pubsub_client(wifi_client);
+unsigned long lastMsg = 0;
+#define MSG_BUFFER_SIZE	(50)
+char msg[MSG_BUFFER_SIZE];
+int value = 0;
 
 void setup() {
 
@@ -96,6 +107,10 @@ void setup() {
   display.begin(i2c_Address, true); // Address 0x3C default
   display.display(); //Turn on
   delay(2000);
+
+  //MQTT Setup
+  pubsub_client.setServer(mqtt_server, 1883);
+  pubsub_client.setCallback(callback);
 
   // Clear the buffer & start drawing
   display.clearDisplay(); // Clear display
@@ -221,6 +236,9 @@ void loop() {
     // then, send data to Tago
   //  httpRequest();
   //}
+
+  sendMQTT(PowerReadings[0]);
+
   counter++;
 
 }  // end of loop
@@ -284,4 +302,62 @@ void printWifiStatus() {
   Serial.print(rssi);
   Serial.println(" dBm");
   Serial.println("");
+}
+
+//MQTT Callback
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+
+}
+
+//connect MQTT if not
+void reconnect() {
+  // Loop until we're reconnected
+  while (!pubsub_client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random pubsub_client ID
+    String clientId = "PUMPSENSOR-";
+    clientId += String(random(0xffff), HEX);
+    // Attempt to connect
+    if (pubsub_client.connect(clientId.c_str(), "mqttuser", "Quik5ilver7")) {
+      Serial.println("connected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(pubsub_client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+void sendMQTT(double PowerReading) {
+  Serial.println("Sending alert via MQTT...");
+  Serial.println(PowerReading);
+  if (!pubsub_client.connected()) {
+    reconnect();
+  }
+
+  unsigned long now = millis();
+  if (now - lastMsg > 2000) {
+    lastMsg = now;
+    ++value;
+
+    //msg variable contains JSON string to send to MQTT server
+    //snprintf (msg, MSG_BUFFER_SIZE, "\{\"amps\": %4.1f, \"humidity\": %4.1f\}", temperature, humidity);
+    snprintf (msg, MSG_BUFFER_SIZE, "\{\"amps01\": %4.2f\}", PowerReading);
+    //Due to a quirk with escaping special characters, if you're using an ESP8266 you will need to use this instead:
+    //snprintf (msg, MSG_BUFFER_SIZE, "{\"temperature\": %4.1f, \"humidity\": %4.1f}", temperature, humidity);
+
+    Serial.print("Publish message: ");
+    Serial.println(msg);
+    pubsub_client.publish("BOOSTPUMPS/01", msg);
+  }
+
 }
