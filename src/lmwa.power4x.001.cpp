@@ -351,13 +351,13 @@ void sendMQTT(double PowerReading) {
 
     //msg variable contains JSON string to send to MQTT server
     //snprintf (msg, MSG_BUFFER_SIZE, "\{\"amps\": %4.1f, \"humidity\": %4.1f\}", temperature, humidity);
-    snprintf (msg, MSG_BUFFER_SIZE, "\{\"amps01\": %4.2f\}", PowerReading);
+    snprintf (msg, MSG_BUFFER_SIZE, "\{\"amps\": %4.2f\}", PowerReading);
     //Due to a quirk with escaping special characters, if you're using an ESP8266 you will need to use this instead:
     //snprintf (msg, MSG_BUFFER_SIZE, "{\"temperature\": %4.1f, \"humidity\": %4.1f}", temperature, humidity);
 
     Serial.print("Publish message: ");
     Serial.println(msg);
-    pubsub_client.publish("BOOSTPUMPS/01", msg);
+    pubsub_client.publish("BOOSTPUMP01", msg);
   }
 
 }
