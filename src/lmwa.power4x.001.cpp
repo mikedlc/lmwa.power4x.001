@@ -119,7 +119,7 @@ void setup() {
   delay(2000); // Wait a couple
   display.clearDisplay(); // Clear display
 
-}  // end of setup
+}  // end of setup 
 
 
 void loop() {
