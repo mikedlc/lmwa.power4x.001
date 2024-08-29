@@ -7,14 +7,17 @@
 */
 /***************************************************************************************************************************/
 
-//Device Information
+//Device & MQTT Information
 const char* ProgramID = "LMWA.p4x.001";
 const char* SensorType = "Boost Pumps";
+const char* mqtt_topic = "MYTOPIC";
+const char* mqtt_unit = "Units";
+const char* mqtt_server_init = "homeassistant.local";
 
-// I/O items
+
+// Mottram Labs ML201185 Stuff for the ESP32 Boards (12-bit A/D)
+#include <ESP32_4CH_CT.h>
 #define Run_LED 4 
-
-// library for the ESP32 Boards (12-bit A/D)
 #define AD_1 34          // GPIO pin for A/D input channel 1
 #define AD_2 35          // GPIO pin for A/D input channel 2
 #define AD_3 36          // GPIO pin for A/D input channel 3
@@ -22,13 +25,7 @@ const char* SensorType = "Boost Pumps";
 #define Cal_value 90   //was 6000   // calibration value
 #define AD_Samples 500  // A/D samples taken per channel read
 #define Sample_rate 500   // delay in uS between A/D sample readings
-
-
-
-//Power Reading Stuff
-#include <ESP32_4CH_CT.h>
-// make an instance of ESP32_4CH_CT
-ESP32_4CH_CT My_PCB(AD_1, AD_2, AD_3, AD_4, AD_Samples, Sample_rate, Cal_value);
+ESP32_4CH_CT My_PCB(AD_1, AD_2, AD_3, AD_4, AD_Samples, Sample_rate, Cal_value); // make an instance of ESP32_4CH_CT
 int8_t ADS_Input = 0;              // A/D channel select
 double PowerReadings[4] = { 0, 0, 0, 0 };  // array for results
 
@@ -53,9 +50,11 @@ int uptimeMinutes;
 char uptimeTotal[30];
 
 //Wifi Stuff
+#include <WiFi.h> // Uncomment for ESP32
+//#include <ESP8266WiFi.h> // Uncomment for D1 Mini ESP8266
+//#include <ESP8266mDNS.h> // Uncomment for D1 mini ES8266
+//#include <WiFiUdp.h> // Uncomment for D1 Mini ESP8266
 void printWifiStatus();
-#include <WiFi.h>
-#include <PubSubClient.h>
 //const char *ssid =	"LMWA-PumpHouse";		// cannot be longer than 32 characters!
 //const char *pass =	"ds42396xcr5";		//
 const char *ssid =	"WiFiFoFum";		// cannot be longer than 32 characters!
@@ -73,10 +72,11 @@ unsigned long postingInterval = 10 * 1000; // delay between updates, in millisec
 int counter = 1;
 
 //MQTT Stuff
+#include <PubSubClient.h>
 void callback(char* topic, byte* payload, unsigned int length);
 void reconnect();
 void sendMQTT(double PowerReading);
-const char* mqtt_server = "homeassistant.local";  //Your network's MQTT server (usually same IP address as Home Assistant server)
+const char* mqtt_server = mqtt_server_init;  //Your network's MQTT server (usually same IP address as Home Assistant server)
 PubSubClient pubsub_client(wifi_client);
 unsigned long lastMsg = 0;
 #define MSG_BUFFER_SIZE	(50)
