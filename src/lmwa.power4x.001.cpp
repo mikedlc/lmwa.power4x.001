@@ -8,7 +8,7 @@
 /***************************************************************************************************************************/
 
 //Device & MQTT Information
-const char* ProgramID = "LMWA.p4x.001";
+const char* ProgramID = "LMWA-p4x-01";
 const char* SensorType = "Boost Pumps";
 const char* mqtt_topic = "boostpumps";
 const char* mqtt_unit = "Amps";
@@ -66,14 +66,6 @@ const char *password =	"ds42396xcr5";		//
 WiFiClient wifi_client;
 String wifistatustoprint;
 
-
-//Tago.io server address and device token
-void httpRequest();
-char server[] = "api.tago.io";
-String Device_Token = "******************************************"; //d1_002_pressure_sensor Default token
-unsigned long lastConnectionTime = 0;            // last time you connected to the server, in milliseconds
-unsigned long postingInterval = 10 * 1000; // delay between updates, in milliseconds
-int counter = 1;
 
 //MQTT Stuff
 #include <PubSubClient.h>
@@ -168,7 +160,6 @@ void setup() {
 
   // No authentication by default
   // ArduinoOTA.setPassword((const char *)"123");
-
   ArduinoOTA.onStart([]() {
     display.clearDisplay();
     Serial.println("Start OTA");
@@ -199,6 +190,11 @@ void setup() {
     else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
     else if (error == OTA_END_ERROR) Serial.println("End Failed");
   });
+
+  //Start OTA
+  ArduinoOTA.begin();
+  Serial.println("OTA Listener Started");
+
   }//End OTA Code Wrapper
 
 
@@ -220,7 +216,7 @@ void loop() {
   //Start keeping track of time
   currentMillis = millis();
 
-  //Calculat Uptime
+  //Calculate Uptime
   uptimeSeconds=currentMillis/1000;
   uptimeHours= uptimeSeconds/3600;
   uptimeDays=uptimeHours/24;
@@ -326,58 +322,10 @@ void loop() {
 
   display.display(); // Write the buffer to the display
 
-  //Time to post data?
-  //if (currentMillis - lastConnectionTime > postingInterval) {
-  //  Serial.print("Time to post to tago.io at "); Serial.println(uptimeTotal);
-    // then, send data to Tago
-  //  httpRequest();
-  //}
-
   sendMQTT(PowerReadings[0]);
-
-  counter++;
 
 }  // end of loop
 
-
-// this method makes a HTTP connection to tago.io
-void httpRequest() {
-/*
-  Serial.println("Sending this Pressure:");
-  Serial.println(psi);
-
-    // close any connection before send a new request.
-    // This will free the socket on the WiFi shield
-    client.stop();
-
-    Serial.println("Starting connection to server for Pressure...");
-    // if you get a connection, report back via serial:
-    String PostPressure = String("{\"variable\":\"pressure\", \"value\":") + String(psi)+ String(",\"unit\":\"PSI\"}");
-    String Dev_token = String("Device-Token: ")+ String(Device_Token);
-    if (client.connect(server,80)) {                      // we will use non-secured connnection (HTTP) for tests
-    Serial.println("Connected to server");
-    // Make a HTTP request:
-    client.println("POST /data? HTTP/1.1");
-    client.println("Host: api.tago.io");
-    client.println("_ssl: false");                        // for non-secured connection, use this option "_ssl: false"
-    client.println(Dev_token);
-    client.println("Content-Type: application/json");
-    client.print("Content-Length: ");
-    client.println(PostPressure.length());
-    client.println();
-    client.println(PostPressure);
-    Serial.println("Pressure sent!\n");
-    }  else {
-      // if you couldn't make a connection:
-      Serial.println("Server connection failed.");
-    }
-
-    client.stop();
-
-    // note the time that the connection was made:
-    lastConnectionTime = currentMillis;
-    */
-}
 
 void printWifiStatus() {
   // print the SSID of the network you're attached to:
