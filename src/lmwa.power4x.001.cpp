@@ -12,7 +12,7 @@ const char* ProgramID = "LMWA-p4x-01";
 const char* SensorType = "Boost Pumps";
 const char* mqtt_topic = "boostpumps";
 const char* mqtt_unit = "Amps";
-const char* mqtt_server_init = "192.168.30.121";
+const char* mqtt_server_init = "192.168.12.165";
 const char* mqtt_user = "mqttuser";
 const char* mqtt_password = "Lafayette123!";
 
