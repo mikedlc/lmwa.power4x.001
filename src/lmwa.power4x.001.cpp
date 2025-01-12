@@ -7,19 +7,16 @@
 */
 /***************************************************************************************************************************/
 
-
-//This code is for monitoring the deep well pumps.
-
+//This code monitors the Boost Pumps
 
 //Device & MQTT Information
-const char* ProgramID = "LMWA_p4x_02";
-const char* SensorType = "Well Pumps";
-//const char* mqtt_topic = "wellpumps";
+const char* ProgramID = "LMWA-p4x-01";
+const char* SensorType = "Boost Pumps";
+const char* mqtt_topic = "boostpumps";
 const char* mqtt_unit = "Amps";
 const char* mqtt_server_init = "192.168.12.165";
 const char* mqtt_user = "mqttuser";
 const char* mqtt_password = "Lafayette123!";
-unsigned long mqtt_frequency = 5000; //mqtt posting frequency in milliseconds (1000 = 1 second)
 
 //OTA Stuff
 #include <ArduinoOTA.h>
@@ -50,7 +47,7 @@ double PowerReadings[4] = { 0, 0, 0, 0 };  // array for results
 Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 //Timing
-unsigned long now = 0;
+unsigned long currentMillis = 0;
 int uptimeSeconds = 0;
 int uptimeDays;
 int uptimeHours;
@@ -219,10 +216,10 @@ void setup() {
 
 void loop() {
   //Start keeping track of time
-  now = millis();
+  currentMillis = millis();
 
   //Calculate Uptime
-  uptimeSeconds=now/1000;
+  uptimeSeconds=currentMillis/1000;
   uptimeHours= uptimeSeconds/3600;
   uptimeDays=uptimeHours/24;
   secsRemaining=uptimeSeconds%3600;
@@ -231,6 +228,61 @@ void loop() {
   sprintf(uptimeTotal,"Uptime %02dD:%02d:%02d:%02d",uptimeDays,uptimeHours,uptimeMinutes,uptimeSeconds);
 
   ArduinoOTA.handle(); // Start listening for OTA Updates
+
+  /*//Wifi Stuff
+  if (WiFi.status() != WL_CONNECTED) {
+    
+    //Write wifi connection to display
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 0);
+    display.println("Booting Program ID:");
+    display.println(ProgramID);
+    display.println("Sensor Type:");
+    display.println(SensorType);
+    display.println("Connecting To WiFi:");
+    display.println(ssid);
+    display.println("\nWait for it......");
+    display.display();
+
+    //write wifi connection to serial
+    Serial.print("Connecting to ");
+    Serial.print(ssid);
+    Serial.println("...");
+    WiFi.setHostname(ProgramID);
+    WiFi.begin(ssid, password);
+
+    //delay 8 seconds for effect
+    delay(8000);
+
+    if (WiFi.waitForConnectResult() != WL_CONNECTED){
+      return;
+    }
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 0);
+    display.println("Boost Pum Sensor\nDevice ID: LMWA.p4x.001");
+    display.setTextSize(1);
+    display.println(" ");
+    display.println("Connected To WiFi:");
+    display.println(ssid);
+    display.println(" ");
+    display.display();
+
+    Serial.println("\n\nWiFi Connected! ");
+    printWifiStatus();
+
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifistatustoprint="Wifi Connected!";
+  }else{
+    wifistatustoprint="Womp, No Wifi!";
+  }
+*/
+
 
   // read A/D values and store in array Value[]
   // these values are representations of Amps (RMS) measured, and still require some calibration
@@ -244,7 +296,7 @@ void loop() {
     PowerReadings[ADS_Input] = 0;
   }
 
-  if (PowerReadings[ADS_Input] > 10){
+  if (PowerReadings[ADS_Input] > 12){
     PowerReadings[ADS_Input] = 15;
   }
 
@@ -277,12 +329,7 @@ void loop() {
 
   display.display(); // Write the buffer to the display
 
-  //Update MQTT
-  now = millis();
-  if (now - lastMsg > mqtt_frequency) {
-    lastMsg = now;
-    sendMQTT(PowerReadings[0]);
-  }
+  sendMQTT(PowerReadings[0]);
 
 }  // end of loop
 
@@ -322,74 +369,55 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 //connect MQTT if not
 void reconnect() {
-  int mqtt_retries = 0;  
-  
   // Loop until we're reconnected
   while (!pubsub_client.connected()) {
-    Serial.print("Attempting MQTT connection...\n");
+    Serial.print("Attempting MQTT connection...");
     // Create a random pubsub_client ID
-    String clientId = ProgramID;
+    String clientId = "PUMPSENSOR-";
     clientId += String(random(0xffff), HEX);
     // Attempt to connect
     if (pubsub_client.connect(clientId.c_str(), mqtt_user, mqtt_password)) {
-      Serial.println("MQTT Connected.");
+      Serial.println("connected");
     } else {
-      mqtt_retries++;      
-      Serial.print("Failed, pubsub_client.state=");
-      Serial.println(pubsub_client.state());
-      Serial.print("Retries: "); Serial.println(mqtt_retries);
-      Serial.println(" try again in 1 second...\n");
-
-      // Wait 3 seconds before retrying
-      delay(1000);
-    }
-    if(mqtt_retries==2){
-      Serial.println("Too many retries. Looping.");
-      return;
+      Serial.print("failed, rc=");
+      Serial.print(pubsub_client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
   }
 }
 
 void sendMQTT(double PowerReading) {
 
-
   if (!pubsub_client.connected()) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.print("Sensor: "); display.println(SensorType);
-    display.print("Prog.ID: "); display.println(ProgramID);
-    display.println("\nMQTT Offline!\n");
-    display.print("Hostname: "); display.println(WiFi.getHostname());
-    display.print("IP: "); display.println(WiFi.localIP());
-    display.print(uptimeTotal);
-    display.display();
     reconnect();
   }
 
-  if(pubsub_client.connected()){
-    //unsigned long now = millis();
+  unsigned long now = millis();
+  if (now - lastMsg > 2000) {
+    lastMsg = now;
     ++value;
-
+    
     Serial.println("\nSending alert via MQTT...");
+    //msg variable contains JSON string to send to MQTT server
+    //snprintf (msg, MSG_BUFFER_SIZE, "\{\"amps\": %4.1f, \"humidity\": %4.1f\}", temperature, humidity);
     
     snprintf (msg, MSG_BUFFER_SIZE, "{\"Amps\": %4.2f}", PowerReadings[0]);
     Serial.print("Publish message to 01: ");
     Serial.println(msg);
-    pubsub_client.publish("northwellpump/amps", msg);
+    pubsub_client.publish("boostpumps/01", msg);
 
     snprintf (msg, MSG_BUFFER_SIZE, "{\"Amps\": %4.2f}", PowerReadings[1]);
     Serial.print("Publish message to 02: ");
     Serial.println(msg);
-    pubsub_client.publish("southwellpump/amps", msg);
+    pubsub_client.publish("boostpumps/02", msg);
 
-    //snprintf (msg, MSG_BUFFER_SIZE, "{\"Amps\": %4.2f}", PowerReadings[2]);
-    //Serial.print("Publish message to 03: ");
-    //Serial.println(msg);
-    //pubsub_client.publish("boostpumps/03", msg);
+    snprintf (msg, MSG_BUFFER_SIZE, "{\"Amps\": %4.2f}", PowerReadings[2]);
+    Serial.print("Publish message to 03: ");
+    Serial.println(msg);
+    pubsub_client.publish("boostpumps/03", msg);
 
-  }else{
-    Serial.println("MQTT Not Connected... Bail on loop!\n");
   }
 
 }
