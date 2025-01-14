@@ -391,6 +391,16 @@ void reconnect() {
 void sendMQTT(double PowerReading) {
 
   if (!pubsub_client.connected()) {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print("Sensor: "); display.println(SensorType);
+    display.print("Prog.ID: "); display.println(ProgramID);
+    display.println("\nMQTT Offline!\n");
+    display.print("Hostname: "); display.println(WiFi.getHostname());
+    display.print("IP: "); display.println(WiFi.localIP());
+    display.print(uptimeTotal);
+    display.display();
     reconnect();
   }
 
